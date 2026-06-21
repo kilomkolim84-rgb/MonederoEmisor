@@ -5,57 +5,78 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.database.FirebaseDatabase
-
-data class Moneda(val monto: Int = 0)
+import com.google.firebase.database.ktx.database
+import com.google.firebase.ktx.Firebase
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        val database = FirebaseDatabase.getInstance()
-        val ref = database.getReference("movimientos")
-        
         setContent {
             MaterialTheme {
-                EmisorScreen { monto ->
-                    val nuevaMoneda = ref.push()
-                    nuevaMoneda.setValue(Moneda(monto))
-                }
+                MonederoScreen()
             }
         }
     }
 }
 
 @Composable
-fun EmisorScreen(onEnviar: (Int) -> Unit) {
+fun MonederoScreen() {
+    var saldo by remember { mutableStateOf(0) }
+    var monto by remember { mutableStateOf("") }
+    
+    val db = Firebase.database
+    val monederoRef = db.getReference("monedero_emisor")
+
+    LaunchedEffect(Unit) {
+        monederoRef.child("saldo").get().addOnSuccessListener {
+            saldo = it.getValue(Int::class.java) ?: 0
+        }
+    }
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
+        verticalArrangement = Arrangement.Center
     ) {
         Text("Monedero Emisor", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(Modifier.height(32.dp))
         
-        Button(onClick = { onEnviar(10) }, modifier = Modifier.fillMaxWidth().height(60.dp)) {
-            Text("Enviar S/ 0.10", fontSize = 22.sp)
-        }
-        Button(onClick = { onEnviar(20) }, modifier = Modifier.fillMaxWidth().height(60.dp)) {
-            Text("Enviar S/ 0.20", fontSize = 22.sp)
-        }
-        Button(onClick = { onEnviar(50) }, modifier = Modifier.fillMaxWidth().height(60.dp)) {
-            Text("Enviar S/ 0.50", fontSize = 22.sp)
-        }
-        Button(onClick = { onEnviar(100) }, modifier = Modifier.fillMaxWidth().height(60.dp)) {
-            Text("Enviar S/ 1.00", fontSize = 22.sp)
-        }
-        Button(onClick = { onEnviar(500) }, modifier = Modifier.fillMaxWidth().height(60.dp)) {
-            Text("Enviar S/ 5.00", fontSize = 22.sp)
+        Text("Saldo actual:", fontSize = 18.sp)
+        Text("S/ $saldo", fontSize = 48.sp, fontWeight = FontWeight.Bold)
+        
+        Spacer(Modifier.height(32.dp))
+        
+        OutlinedTextField(
+            value = monto,
+            onValueChange = { monto = it },
+            label = { Text("Monto a depositar") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        
+        Spacer(Modifier.height(16.dp))
+        
+        Button(
+            onClick = {
+                val montoInt = monto.toIntOrNull() ?: 0
+                if (montoInt > 0) {
+                    val nuevoSaldo = saldo + montoInt
+                    monederoRef.child("saldo").setValue(nuevoSaldo)
+                    monederoRef.child("ultimo_movimiento").setValue(montoInt)
+                    saldo = nuevoSaldo
+                    monto = ""
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("DEPOSITAR", fontSize = 18.sp)
         }
     }
 }
